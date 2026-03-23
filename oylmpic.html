@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<title>Olympic Echo | Light Studio</title>
+	<style>
+		:root {
+			--ring-blue: #0081C8; --ring-yellow: #FCB131; --ring-black: #000000;
+			--ring-green: #00A651; --ring-red: #EE334E;
+			--bg-light: #f0f2f5; --panel-bg: #ffffff;
+		}
+		body { 
+			margin: 0; background: var(--bg-light); overflow: hidden; 
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+			display: flex; align-items: center; justify-content: center; height: 100vh;
+			touch-action: none;
+		}
+		#studio-case {
+			position: relative; width: 96vw; height: 94vh; 
+			background: var(--panel-bg); border-radius: 30px;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1); 
+			border: 1px solid #e1e4e8;
+			display: flex; flex-direction: column; overflow: hidden;
+		}
+		canvas { flex: 1; cursor: crosshair; touch-action: none; background: #ffffff; }
+		#rack { 
+			background: #f8fafc; padding: 20px 40px; 
+			display: flex; justify-content: space-between; align-items: center; 
+			border-top: 1px solid #e1e4e8;
+		}
+		.group { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+		.btn {
+			background: #ffffff; border: 1px solid #cbd5e0; padding: 10px 20px; border-radius: 12px;
+			font-weight: 700; color: #4a5568; font-size: 11px; text-transform: uppercase;
+			cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); letter-spacing: 0.5px;
+			box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+		}
+		.btn:active { transform: scale(0.95); }
+		.btn.active { color: white; background: var(--ring-blue); border-color: var(--ring-blue); }
+		.btn.major { color: #805ad5; border-color: #d6bcfa; }
+		.btn.major.active { background: #805ad5; color: white; border-color: #805ad5; }
+		.label { font-size: 9px; font-weight: 800; color: #a0aec0; letter-spacing: 1.5px; text-transform: uppercase; }
+	</style>
+</head>
+<body>
+
+<div id="studio-case">
+	<canvas id="c"></canvas>
+	<div id="rack">
+		<div class="group"><span class="label">Engine</span>
+			<div style="display:flex; gap:10px">
+				<button class="btn" id="pwr" onclick="toggleAudio()">Power</button>
+				<button class="btn major" id="p-major" onclick="pipeMajor=!pipeMajor; this.classList.toggle('active')">Sync Rings</button>
+			</div>
+		</div>
+		<div class="group"><span class="label">Echo Valley</span>
+			<button class="btn" id="warp" onclick="warp=!warp; this.classList.toggle('active')">Trail Mode</button>
+		</div>
+		<div class="group"><span class="label">Physics</span>
+			<button class="btn" id="grav" onclick="gravity=!gravity; this.classList.toggle('active')">Gravity</button>
+		</div>
+		<div class="group"><span class="label">Input</span>
+			<button class="btn" onclick="randomizeNodes()">Pulse</button>
+		</div>
+	</div>
+</div>
+
+<script>
+const canvas = document.getElementById("c"), ctx = canvas.getContext("2d");
+let running=false, pipeMajor=false, gravity=false, warp=false;
+let audioCtx, masterGain, delayNode, feedbackNode;
+
+// Original Olympic Palette
+const colors = ["#0081C8", "#FCB131", "#000000", "#00A651", "#EE334E"];
+const ratios = [1, 1.125, 1.25, 1.5, 2];
+const rings = [];
+const activeTouches = new Map();
+
+function resize(){ 
+	const dpr = window.devicePixelRatio || 1;
+	canvas.width = canvas.offsetWidth * dpr; 
+	canvas.height = canvas.offsetHeight * dpr;
+	ctx.scale(dpr, dpr);
+}
+window.onresize = resize; resize();
+
+function createAudio(){
+	audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+	masterGain = audioCtx.createGain(); masterGain.gain.value = 0.15;
+	
+	delayNode = audioCtx.createDelay(2.0);
+	feedbackNode = audioCtx.createGain();
+	delayNode.delayTime.value = 0.3;
+	feedbackNode.gain.value = 0.3;
+
+	masterGain.connect(delayNode);
+	delayNode.connect(feedbackNode);
+	feedbackNode.connect(delayNode);
+	delayNode.connect(audioCtx.destination);
+	masterGain.connect(audioCtx.destination);
+
+	rings.forEach((r, i) => {
+		r.osc = audioCtx.createOscillator();
+		r.g = audioCtx.createGain();
+		r.osc.type = 'sine'; // Smoother sound for light theme
+		r.osc.connect(r.g);
+		r.g.connect(masterGain);
+		r.osc.start();
+	});
+}
+
+function randomizeNodes() {
+	rings.forEach(r => {
+		r.spinVel = (Math.random() - 0.5) * 1.5;
+		r.nodes.forEach(n => n.offset = (Math.random() - 0.5) * 120);
+	});
+}
+
+function toggleAudio() {
+	if(!running){ 
+		rings.length = 0; 
+		for(let i=0; i<5; i++) rings.push({
+			x:0, y:0, rotation:0, spinVel:0, vy:0, baseF: 220 * ratios[i],
+			nodes: Array.from({length: 24}, (_,j) => ({angle:(j/24)*Math.PI*2, base:65, offset:0}))
+		});
+		createAudio(); running=true; 
+		document.getElementById('pwr').classList.add('active'); 
+	} else { audioCtx.close(); running=false; document.getElementById('pwr').classList.remove('active'); }
+}
+
+function handleStart(id, x, y) {
+	rings.forEach(r => r.nodes.forEach(n => {
+		let rd = n.base + n.offset;
+		let nx = r.x + Math.cos(n.angle + r.rotation)*rd, ny = r.y + Math.sin(n.angle + r.rotation)*rd;
+		if(Math.hypot(x-nx, y-ny) < 40) activeTouches.set(id, {r, n});
+	}));
+}
+
+function handleMove(id, x, y) {
+	const drag = activeTouches.get(id);
+	if(!drag) return;
+	let dist = Math.hypot(x - drag.r.x, y - drag.r.y) - 65;
+	if(pipeMajor) {
+		rings.forEach(r => { r.nodes.forEach(n => n.offset = dist); r.spinVel = (x - drag.r.x)*0.001; });
+	} else {
+		drag.n.offset = dist; drag.r.spinVel = (x - drag.r.x)*0.002;
+	}
+}
+
+// Unified Event Handling
+canvas.onmousedown = e => handleStart('mouse', e.offsetX, e.offsetY);
+window.onmousemove = e => handleMove('mouse', e.offsetX, e.offsetY);
+window.onmouseup = () => activeTouches.delete('mouse');
+
+canvas.ontouchstart = e => {
+	const rct = canvas.getBoundingClientRect();
+	Array.from(e.changedTouches).forEach(t => handleStart(t.identifier, t.clientX - rct.left, t.clientY - rct.top));
+};
+canvas.ontouchmove = e => {
+	const rct = canvas.getBoundingClientRect();
+	Array.from(e.changedTouches).forEach(t => handleMove(t.identifier, t.clientX - rct.left, t.clientY - rct.top));
+};
+canvas.ontouchend = e => Array.from(e.changedTouches).forEach(t => activeTouches.delete(t.identifier));
+
+function loop(){
+	ctx.fillStyle = warp ? "rgba(255, 255, 255, 0.12)" : "#ffffff";
+	ctx.fillRect(0,0,canvas.offsetWidth,canvas.offsetHeight);
+
+	const cx = canvas.offsetWidth/2, cy = canvas.offsetHeight/2, spc = 160;
+	
+	rings.forEach((r, i) => {
+		if(!gravity) {
+			let tx = (i < 3) ? cx + (i-1)*spc : cx + (i-3.5)*spc;
+			let ty = (i < 3) ? cy - 70 : cy + 70;
+			r.x += (tx - r.x) * 0.1; r.y += (ty - r.y) * 0.1;
+			r.vy = 0;
+		} else {
+			r.vy += 0.4; r.y += r.vy;
+			if(r.y > canvas.offsetHeight - 110) { 
+				r.y = canvas.offsetHeight - 110; r.vy *= -0.75; r.spinVel += 0.08; 
+			}
+		}
+
+		r.rotation += r.spinVel + 0.01;
+		r.spinVel *= 0.98;
+		let comp = r.nodes.reduce((a,n)=>a+Math.abs(n.offset),0)/24;
+		r.nodes.forEach(n => n.offset *= 0.96);
+
+		if(running){
+			let physPitch = r.baseF - (r.vy * 1.2) + (comp * 0.6);
+			r.osc.frequency.setTargetAtTime(Math.max(60, physPitch), audioCtx.currentTime, 0.1);
+			r.g.gain.setTargetAtTime(0.05 + (comp/400), audioCtx.currentTime, 0.1);
+		}
+
+		ctx.beginPath();
+		r.nodes.forEach((n,j) => {
+			let rd = n.base + n.offset;
+			let nx = r.x + Math.cos(n.angle + r.rotation)*rd, ny = r.y + Math.sin(n.angle + r.rotation)*rd;
+			j === 0 ? ctx.moveTo(nx, ny) : ctx.lineTo(nx, ny);
+		});
+		ctx.closePath();
+		
+		ctx.strokeStyle = colors[i];
+		ctx.lineWidth = warp ? 12 : 6;
+		ctx.lineCap = "round";
+		ctx.stroke();
+	});
+	requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
