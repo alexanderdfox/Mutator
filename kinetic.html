@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DNA Hybrid | Kinetic Vocoder Edition</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<style>
+:root { --neon: #00f2ff; --case: #1a1a1a; --led: #00ff66; --accent: #ff0055; --mutate: #ffcc00; }
+body { margin:0; background:#050505; color:var(--neon); font-family:'Courier New',monospace; overflow:hidden; display:flex; align-items:center; justify-content:center; height:100vh; touch-action: none;}
+#main-container { display:flex; align-items:center; gap:25px; position:relative; z-index:10; }
+.helix-canvas { width:60px; height:500px; filter: drop-shadow(0 0 8px var(--neon)); opacity:0.5; }
+#pedal-board { background: var(--case); width: 620px; padding: 25px; border-radius: 20px; border: 4px solid #333; box-shadow: 0 20px 60px rgba(0,0,0,0.9); position: relative; }
+.display-area { background:#000; border:2px solid #333; padding:12px; margin-bottom:15px; border-radius:10px; position:relative; }
+#dnaInput { background:transparent; color:var(--neon); border:none; font-size:1.4rem; letter-spacing:8px; width:100%; text-align:center; text-transform:uppercase; outline:none; }
+.interface { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px; gap: 8px; flex-wrap: nowrap; }
+.knob-group { display:flex; gap:8px; }
+.knob { text-align:center; width:40px; }
+.knob input { appearance:none; background:#333; height:4px; width:45px; transform:rotate(-90deg) translate(-22px,0); margin-bottom:40px; display:block; }
+.label { font-size:0.45rem; color:#888; margin-top:5px; font-weight:bold; text-transform: uppercase; white-space: nowrap;}
+.stomp-section { display:flex; flex-direction:column; align-items:center; gap:6px; }
+.led { width:10px; height:10px; background:#131; border-radius:50%; border:2px solid #000; transition:0.2s; }
+.led.on { background:var(--led); box-shadow:0 0 15px var(--led); }
+.led.accent.on { background:var(--accent); box-shadow:0 0 15px var(--accent); }
+.led.mutate-led.on { background:var(--mutate); box-shadow:0 0 15px var(--mutate); }
+.stomp { width:52px; height:52px; background:#444; border-radius:50%; border:5px solid #222; cursor:pointer; box-shadow:0 4px 0 #111; transition:0.1s; color:#111; font-weight:bold; font-size:0.45rem; display:flex; align-items:center; justify-content:center; text-align:center; padding:4px; text-transform: uppercase; }
+.stomp:active { transform:translateY(3px); box-shadow:0 1px 0 #111; }
+select { background: #000; color: var(--neon); border: 1px solid #333; font-family: monospace; font-size: 0.55rem; margin-top: 4px; cursor: pointer; outline: none;}
+.keys { display:flex; gap:3px; width:100%; height:60px; margin-top:10px; }
+.key { flex:1; border:1px solid rgba(0,242,255,0.15); border-radius:0 0 4px 4px; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:5px; font-size:9px; transition:0.1s; background:rgba(0,242,255,0.03); font-weight: bold; }
+.key.playing { background:var(--neon); color:#000; box-shadow:0 0 15px var(--neon); transform: translateY(2px); }
+#scope { position:fixed; bottom:0; left:0; width:100%; height:80px; opacity:0.3; z-index:1; pointer-events:none; }
+.velocity-meter { width: 100%; height: 3px; background: #222; margin-top: 8px; border-radius: 2px; overflow: hidden; }
+#velocityBar { height: 100%; width: 0%; background: var(--accent); transition: width 0.1s; }
+</style>
+</head>
+<body>
+
+<canvas id="scope"></canvas>
+
+<div id="main-container">
+    <canvas id="helixLeft" class="helix-canvas"></canvas>
+    
+    <div id="pedal-board">
+        <div class="display-area">
+            <input type="text" id="dnaInput" value="ATCGATCG" maxlength="12">
+            <div style="font-size:0.4rem; color:#444; margin-top:4px; letter-spacing:2px;">EVOLUTIONARY KINETIC ENGINE</div>
+            <div class="velocity-meter"><div id="velocityBar"></div></div>
+        </div>
+
+        <div class="interface">
+            <div class="knob-group">
+                <div class="knob"><input type="range" id="drive" min="1" max="25" value="12"><div class="label">DRIVE</div></div>
+                <div class="knob"><input type="range" id="tone" min="400" max="15000" value="7000"><div class="label">TONE</div></div>
+            </div>
+
+            <div class="stomp-section">
+                <div class="led mutate-led" id="autoLed"></div>
+                <div class="stomp" onclick="toggleAutoMutate()">AUTO EVOLVE</div>
+            </div>
+
+            <div class="stomp-section">
+                <div class="led mutate-led" id="mutateLed"></div>
+                <div class="stomp" onclick="manualMutate()">MUTATE</div>
+            </div>
+
+            <div class="stomp-section">
+                <div class="led accent" id="micLed"></div>
+                <div class="stomp" onclick="toggleMic()">MIC IN</div>
+            </div>
+
+            <div class="stomp-section">
+                <div class="led" id="vocoderLed"></div>
+                <div class="stomp" onclick="toggleVocoder()">VOCODER</div>
+            </div>
+
+            <div class="stomp-section">
+                <div class="led" id="powerLed"></div>
+                <div class="stomp" onclick="togglePower()">POWER</div>
+            </div>
+
+            <div class="stomp-section">
+                <div style="height:10px"></div>
+                <div class="label">SPIN MAT.</div>
+                <select id="material" onchange="applyMaterial()">
+                    <option value="metal">METAL</option>
+                    <option value="ceramic" selected>CERAMIC</option>
+                    <option value="plastic">PLASTIC</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="keys" id="keyboard"></div>
+    </div>
+
+    <canvas id="helixRight" class="helix-canvas"></canvas>
+</div>
+
+<script>
+let audioCtx, dnaShaper, toneFilter, analyzer, masterGain;
+let spinnerOsc, spinnerNoise, noiseGain, micGain, micNode;
+let engineStarted = false, autoMutate = false, isMicActive = false, vocoderActive = false;
+let spinVelocity = 0, lastX = 0, isDragging = false;
+let activeNotes = new Map();
+
+const keyFreqs = { 'A':130.81,'S':146.83,'D':164.81,'F':174.61,'G':196.00,'H':220.00,'J':246.94,'K':261.63 };
+
+async function startEngine() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    dnaShaper = audioCtx.createWaveShaper();
+    toneFilter = audioCtx.createBiquadFilter();
+    masterGain = audioCtx.createGain();
+    analyzer = audioCtx.createAnalyser();
+    analyzer.fftSize = 256;
+
+    // Spinner Drone
+    spinnerOsc = audioCtx.createOscillator();
+    spinnerOsc.type = "triangle";
+    const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0; i<data.length; i++) data[i] = Math.random() * 2 - 1;
+    spinnerNoise = audioCtx.createBufferSource();
+    spinnerNoise.buffer = buffer;
+    spinnerNoise.loop = true;
+
+    noiseGain = audioCtx.createGain();
+    const spinGain = audioCtx.createGain();
+    spinnerOsc.connect(spinGain);
+    spinnerNoise.connect(noiseGain);
+    spinGain.connect(dnaShaper);
+    noiseGain.connect(dnaShaper);
+
+    dnaShaper.connect(toneFilter);
+    toneFilter.connect(masterGain);
+    masterGain.connect(analyzer);
+    analyzer.connect(audioCtx.destination);
+
+    spinnerOsc.start();
+    spinnerNoise.start();
+    toneFilter.type = "lowpass";
+    updateShaper();
+    applyMaterial();
+    buildKeyboard();
+    engineStarted = true;
+    drawAll();
+}
+
+function buildKeyboard() {
+    const kb = document.getElementById('keyboard'); 
+    kb.innerHTML = '';
+    Object.keys(keyFreqs).forEach(k => {
+        const div = document.createElement('div');
+        div.className = 'key'; div.innerText = k; div.dataset.key = k;
+        div.onmousedown = () => playNote(keyFreqs[k], k);
+        div.onmouseup = () => stopNote(k);
+        div.ontouchstart = (e) => { e.preventDefault(); playNote(keyFreqs[k], k); };
+        div.ontouchend = (e) => { e.preventDefault(); stopNote(k); };
+        kb.appendChild(div);
+    });
+}
+
+function playNote(freq, key) {
+    if(!engineStarted || activeNotes.has(key)) return;
+    const osc = audioCtx.createOscillator();
+    const env = audioCtx.createGain();
+    const noteDrive = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    noteDrive.gain.value = document.getElementById('drive').value / 8;
+    env.gain.setValueAtTime(0, audioCtx.currentTime);
+    env.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.05);
+    osc.connect(noteDrive); 
+    noteDrive.connect(env); 
+    env.connect(dnaShaper);
+    osc.start();
+    activeNotes.set(key, {osc, env});
+    document.querySelector(`[data-key="${key}"]`)?.classList.add('playing');
+}
+
+function stopNote(key) {
+    if(activeNotes.has(key)) {
+        const {osc, env} = activeNotes.get(key);
+        env.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.stop(audioCtx.currentTime + 0.4);
+        activeNotes.delete(key);
+        document.querySelector(`[data-key="${key}"]`)?.classList.remove('playing');
+    }
+}
+
+async function toggleMic() {
+    if(!engineStarted) await startEngine();
+    const led = document.getElementById('micLed');
+    if(!isMicActive) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+            micNode = audioCtx.createMediaStreamSource(stream);
+            micGain = audioCtx.createGain();
+            micGain.gain.value = document.getElementById('drive').value / 10;
+            micNode.connect(micGain);
+            micGain.connect(dnaShaper);
+            window.activeStream = stream;
+            isMicActive = true;
+            led.classList.add('on');
+        } catch(e) { alert("Mic Access Denied"); }
+    } else {
+        window.activeStream.getTracks().forEach(t => t.stop());
+        isMicActive = false;
+        led.classList.remove('on');
+    }
+}
+
+function toggleVocoder() {
+    vocoderActive = !vocoderActive;
+    document.getElementById('vocoderLed').classList.toggle('on', vocoderActive);
+}
+
+function togglePower() {
+    const led = document.getElementById('powerLed');
+    if(!engineStarted) { startEngine(); led.classList.add('on'); } 
+    else { location.reload(); } // Safest clean reset
+}
+
+function updateShaper() {
+    if(!dnaShaper) return;
+    const dna = document.getElementById('dnaInput').value.toUpperCase();
+    const curve = new Float32Array(44100);
+    const baseDrive = document.getElementById('drive').value / 6;
+    
+    // Vocoder effect: scale intensity based on active keys or mic activity
+    let modFactor = 1.0;
+    if(vocoderActive) {
+        const keysDown = activeNotes.size;
+        modFactor = 0.5 + (keysDown * 0.4);
+    }
+
+    for(let i=0; i<curve.length; i++) {
+        let x = (i * 2) / curve.length - 1;
+        for(let c of dna) {
+            const d = baseDrive * modFactor;
+            if(c==="A") x = Math.tanh(x * (1.8 * d));
+            if(c==="T") x = Math.sin(x * (1.5 * d));
+            if(c==="C") x = x > 0 ? Math.pow(x, 0.7) : -Math.pow(Math.abs(x), 0.7);
+            if(c==="G") x = Math.atan(x * (2.2 * d));
+        }
+        curve[i] = x;
+    }
+    dnaShaper.curve = curve;
+}
+
+function applyMaterial() {
+    if(!engineStarted) return;
+    const mat = document.getElementById('material').value;
+    if(mat === "metal") { spinnerOsc.type = "sawtooth"; noiseGain.base = 0.3; }
+    else if(mat === "ceramic") { spinnerOsc.type = "triangle"; noiseGain.base = 0.15; }
+    else { spinnerOsc.type = "sine"; noiseGain.base = 0.08; }
+}
+
+function manualMutate() {
+    const bases = ["A","T","C","G"];
+    let newDna = Array.from({length:8}, () => bases[Math.floor(Math.random()*4)]).join('');
+    document.getElementById('dnaInput').value = newDna;
+    updateShaper();
+    const mled = document.getElementById('mutateLed');
+    mled.classList.add('on');
+    setTimeout(() => mled.classList.remove('on'), 150);
+}
+
+function toggleAutoMutate() {
+    autoMutate = !autoMutate;
+    document.getElementById('autoLed').classList.toggle('on', autoMutate);
+}
+setInterval(() => { if(autoMutate) manualMutate(); }, 2500);
+
+// Input Handling
+const handleMove = (x) => {
+    if(!isDragging) return;
+    let dx = x - lastX;
+    spinVelocity += dx * 0.005;
+    lastX = x;
+};
+
+window.addEventListener('mousedown', e => { if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') { isDragging = true; lastX = e.clientX; } });
+window.addEventListener('mousemove', e => handleMove(e.clientX));
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('touchstart', e => { if(e.target.tagName !== 'INPUT') { isDragging = true; lastX = e.touches[0].clientX; } });
+window.addEventListener('touchmove', e => handleMove(e.touches[0].clientX));
+window.addEventListener('touchend', () => isDragging = false);
+
+window.addEventListener('keydown', e => { if(keyFreqs[e.key.toUpperCase()]) playNote(keyFreqs[e.key.toUpperCase()], e.key.toUpperCase()); });
+window.addEventListener('keyup', e => stopNote(e.key.toUpperCase()));
+
+function drawAll() {
+    requestAnimationFrame(drawAll);
+    if(!engineStarted) return;
+
+    if(vocoderActive) updateShaper(); // Continuous shaper update for vocoder feel
+
+    spinVelocity *= 0.985; 
+    const speed = Math.abs(spinVelocity);
+    document.getElementById('velocityBar').style.width = `${Math.min(speed * 100, 100)}%`;
+    
+    spinnerOsc.frequency.setTargetAtTime(40 + (speed * 1800), audioCtx.currentTime, 0.05);
+    noiseGain.gain.setTargetAtTime(speed * (noiseGain.base || 0.1), audioCtx.currentTime, 0.1);
+    toneFilter.frequency.setTargetAtTime(document.getElementById('tone').value, audioCtx.currentTime, 0.1);
+
+    const buffer = new Uint8Array(analyzer.frequencyBinCount);
+    analyzer.getByteFrequencyData(buffer);
+    const vol = buffer.reduce((a,b)=>a+b,0)/buffer.length;
+    const time = Date.now() * 0.002;
+
+    [document.getElementById('helixLeft'), document.getElementById('helixRight')].forEach(canvas => {
+        const ctx = canvas.getContext('2d');
+        canvas.width = 60; canvas.height = 500;
+        const dna = document.getElementById('dnaInput').value;
+        const colors = {A:'#00f2ff', T:'#ff00ea', C:'#22ff00', G:'#ffcc00'};
+        for(let i=0; i<20; i++){
+            const char = dna[i % dna.length];
+            const y = (i/20) * 500;
+            const xOff = Math.sin(time + i * 0.5 + speed) * (15 + vol * 0.5);
+            ctx.strokeStyle = colors[char] || '#fff';
+            ctx.globalAlpha = 0.2; ctx.beginPath(); ctx.moveTo(30+xOff, y); ctx.lineTo(30-xOff, y); ctx.stroke();
+            ctx.globalAlpha = 0.6; ctx.fillStyle = colors[char] || '#fff';
+            [xOff, -xOff].forEach(x => { ctx.beginPath(); ctx.arc(30+x, y, 1.5 + vol/40 + speed*3, 0, Math.PI*2); ctx.fill(); });
+        }
+    });
+
+    const sCanvas = document.getElementById('scope');
+    const sCtx = sCanvas.getContext('2d');
+    sCanvas.width = window.innerWidth; sCanvas.height = 80;
+    const tData = new Uint8Array(analyzer.frequencyBinCount);
+    analyzer.getByteTimeDomainData(tData);
+    sCtx.strokeStyle = isMicActive ? "var(--accent)" : "var(--neon)";
+    sCtx.lineWidth = 2; sCtx.beginPath();
+    for(let i=0; i<tData.length; i++){
+        const x = (i/tData.length) * sCanvas.width;
+        const y = (tData[i]/255) * 80;
+        if(i===0) sCtx.moveTo(x,y); else sCtx.lineTo(x,y);
+    }
+    sCtx.stroke();
+}
+
+document.getElementById('dnaInput').addEventListener('input', e => {
+    e.target.value = e.target.value.toUpperCase().replace(/[^ATCG]/g,'');
+    updateShaper();
+});
+document.getElementById('drive').addEventListener('input', updateShaper);
+</script>
+</body>
+</html>
