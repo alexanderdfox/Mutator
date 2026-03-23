@@ -2,35 +2,73 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>DNA Hybrid | Kinetic Vocoder Edition</title>
+<title>DNA Hybrid | Kinetic Gyro Edition</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <style>
-:root { --neon: #00f2ff; --case: #1a1a1a; --led: #00ff66; --accent: #ff0055; --mutate: #ffcc00; }
+:root { --neon: #00f2ff; --case: #1a1a1a; --led: #00ff66; --accent: #ff0055; --mutate: #ffcc00; --gyro: #bc00ff; }
 body { margin:0; background:#050505; color:var(--neon); font-family:'Courier New',monospace; overflow:hidden; display:flex; align-items:center; justify-content:center; height:100vh; touch-action: none;}
-#main-container { display:flex; align-items:center; gap:25px; position:relative; z-index:10; }
-.helix-canvas { width:60px; height:500px; filter: drop-shadow(0 0 8px var(--neon)); opacity:0.5; }
-#pedal-board { background: var(--case); width: 620px; padding: 25px; border-radius: 20px; border: 4px solid #333; box-shadow: 0 20px 60px rgba(0,0,0,0.9); position: relative; }
+
+#main-container { display:flex; align-items:center; gap:15px; position:relative; z-index:10; width: 95vw; justify-content: center; }
+.helix-canvas { width:40px; height:80vh; filter: drop-shadow(0 0 8px var(--neon)); opacity:0.5; }
+
+#pedal-board { 
+    background: var(--case); 
+    width: 100%;
+    max-width: 650px; 
+    padding: 20px; 
+    border-radius: 20px; 
+    border: 4px solid #333; 
+    box-shadow: 0 20px 60px rgba(0,0,0,0.9); 
+    position: relative; 
+    transition: transform 0.1s ease-out;
+}
+
 .display-area { background:#000; border:2px solid #333; padding:12px; margin-bottom:15px; border-radius:10px; position:relative; }
 #dnaInput { background:transparent; color:var(--neon); border:none; font-size:1.4rem; letter-spacing:8px; width:100%; text-align:center; text-transform:uppercase; outline:none; }
-.interface { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px; gap: 8px; flex-wrap: nowrap; }
-.knob-group { display:flex; gap:8px; }
-.knob { text-align:center; width:40px; }
-.knob input { appearance:none; background:#333; height:4px; width:45px; transform:rotate(-90deg) translate(-22px,0); margin-bottom:40px; display:block; }
-.label { font-size:0.45rem; color:#888; margin-top:5px; font-weight:bold; text-transform: uppercase; white-space: nowrap;}
+
+.interface { 
+    display:grid; 
+    grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+    gap: 10px; 
+    margin-bottom: 15px; 
+}
+
+.knob-group { display:flex; gap:10px; grid-column: span 2; justify-content: center;}
+.knob { text-align:center; width:45px; position: relative;}
+.knob input { appearance:none; background:#333; height:4px; width:50px; transform:rotate(-90deg) translate(-25px,0); margin-bottom:45px; display:block; cursor: pointer;}
+
+.label { font-size:0.45rem; color:#888; margin-top:5px; font-weight:bold; text-transform: uppercase; white-space: nowrap; text-align: center;}
+
 .stomp-section { display:flex; flex-direction:column; align-items:center; gap:6px; }
 .led { width:10px; height:10px; background:#131; border-radius:50%; border:2px solid #000; transition:0.2s; }
 .led.on { background:var(--led); box-shadow:0 0 15px var(--led); }
 .led.accent.on { background:var(--accent); box-shadow:0 0 15px var(--accent); }
 .led.mutate-led.on { background:var(--mutate); box-shadow:0 0 15px var(--mutate); }
-.stomp { width:52px; height:52px; background:#444; border-radius:50%; border:5px solid #222; cursor:pointer; box-shadow:0 4px 0 #111; transition:0.1s; color:#111; font-weight:bold; font-size:0.45rem; display:flex; align-items:center; justify-content:center; text-align:center; padding:4px; text-transform: uppercase; }
+.led.gyro-led.on { background:var(--gyro); box-shadow:0 0 15px var(--gyro); }
+
+.stomp { 
+    width:55px; height:55px; background:#444; border-radius:50%; border:5px solid #222; 
+    cursor:pointer; box-shadow:0 4px 0 #111; transition:0.1s; color:#111; 
+    font-weight:bold; font-size:0.45rem; display:flex; align-items:center; 
+    justify-content:center; text-align:center; padding:4px; text-transform: uppercase; 
+}
 .stomp:active { transform:translateY(3px); box-shadow:0 1px 0 #111; }
-select { background: #000; color: var(--neon); border: 1px solid #333; font-family: monospace; font-size: 0.55rem; margin-top: 4px; cursor: pointer; outline: none;}
-.keys { display:flex; gap:3px; width:100%; height:60px; margin-top:10px; }
-.key { flex:1; border:1px solid rgba(0,242,255,0.15); border-radius:0 0 4px 4px; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:5px; font-size:9px; transition:0.1s; background:rgba(0,242,255,0.03); font-weight: bold; }
+
+select { background: #000; color: var(--neon); border: 1px solid #333; font-family: monospace; font-size: 0.55rem; margin-top: 4px; outline: none; width: 100%;}
+
+.keys { display:flex; gap:3px; width:100%; height:70px; margin-top:10px; }
+.key { flex:1; border:1px solid rgba(0,242,255,0.15); border-radius:0 0 4px 4px; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:5px; font-size:10px; transition:0.1s; background:rgba(0,242,255,0.03); font-weight: bold; }
 .key.playing { background:var(--neon); color:#000; box-shadow:0 0 15px var(--neon); transform: translateY(2px); }
-#scope { position:fixed; bottom:0; left:0; width:100%; height:80px; opacity:0.3; z-index:1; pointer-events:none; }
+
+#scope { position:fixed; bottom:0; left:0; width:100%; height:100px; opacity:0.3; z-index:1; pointer-events:none; }
 .velocity-meter { width: 100%; height: 3px; background: #222; margin-top: 8px; border-radius: 2px; overflow: hidden; }
 #velocityBar { height: 100%; width: 0%; background: var(--accent); transition: width 0.1s; }
+
+@media (max-width: 600px) {
+    .helix-canvas { display: none; }
+    #dnaInput { font-size: 1.1rem; letter-spacing: 4px; }
+    .stomp { width: 48px; height: 48px; font-size: 0.4rem; }
+}
 </style>
 </head>
 <body>
@@ -43,7 +81,7 @@ select { background: #000; color: var(--neon); border: 1px solid #333; font-fami
     <div id="pedal-board">
         <div class="display-area">
             <input type="text" id="dnaInput" value="ATCGATCG" maxlength="12">
-            <div style="font-size:0.4rem; color:#444; margin-top:4px; letter-spacing:2px;">EVOLUTIONARY KINETIC ENGINE</div>
+            <div style="font-size:0.4rem; color:#444; margin-top:4px; letter-spacing:2px; text-align:center;">HYBRID KINETIC ENGINE // GYRO ENABLED</div>
             <div class="velocity-meter"><div id="velocityBar"></div></div>
         </div>
 
@@ -51,6 +89,11 @@ select { background: #000; color: var(--neon); border: 1px solid #333; font-fami
             <div class="knob-group">
                 <div class="knob"><input type="range" id="drive" min="1" max="25" value="12"><div class="label">DRIVE</div></div>
                 <div class="knob"><input type="range" id="tone" min="400" max="15000" value="7000"><div class="label">TONE</div></div>
+            </div>
+
+            <div class="stomp-section">
+                <div class="led gyro-led" id="gyroLed"></div>
+                <div class="stomp" onclick="toggleGyro()">GYRO MODE</div>
             </div>
 
             <div class="stomp-section">
@@ -80,7 +123,7 @@ select { background: #000; color: var(--neon); border: 1px solid #333; font-fami
 
             <div class="stomp-section">
                 <div style="height:10px"></div>
-                <div class="label">SPIN MAT.</div>
+                <div class="label">SPIN</div>
                 <select id="material" onchange="applyMaterial()">
                     <option value="metal">METAL</option>
                     <option value="ceramic" selected>CERAMIC</option>
@@ -98,13 +141,15 @@ select { background: #000; color: var(--neon); border: 1px solid #333; font-fami
 <script>
 let audioCtx, dnaShaper, toneFilter, analyzer, masterGain;
 let spinnerOsc, spinnerNoise, noiseGain, micGain, micNode;
-let engineStarted = false, autoMutate = false, isMicActive = false, vocoderActive = false;
+let engineStarted = false, autoMutate = false, isMicActive = false, vocoderActive = false, gyroActive = false;
 let spinVelocity = 0, lastX = 0, isDragging = false;
 let activeNotes = new Map();
+let boardRotation = { x: 0, y: 0 };
 
 const keyFreqs = { 'A':130.81,'S':146.83,'D':164.81,'F':174.61,'G':196.00,'H':220.00,'J':246.94,'K':261.63 };
 
 async function startEngine() {
+    if (engineStarted) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     dnaShaper = audioCtx.createWaveShaper();
     toneFilter = audioCtx.createBiquadFilter();
@@ -112,18 +157,21 @@ async function startEngine() {
     analyzer = audioCtx.createAnalyser();
     analyzer.fftSize = 256;
 
-    // Spinner Drone
     spinnerOsc = audioCtx.createOscillator();
     spinnerOsc.type = "triangle";
-    const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+    
+    const bufferSize = audioCtx.sampleRate;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const data = buffer.getChannelData(0);
-    for(let i=0; i<data.length; i++) data[i] = Math.random() * 2 - 1;
+    for(let i=0; i<bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    
     spinnerNoise = audioCtx.createBufferSource();
     spinnerNoise.buffer = buffer;
     spinnerNoise.loop = true;
 
     noiseGain = audioCtx.createGain();
     const spinGain = audioCtx.createGain();
+    
     spinnerOsc.connect(spinGain);
     spinnerNoise.connect(noiseGain);
     spinGain.connect(dnaShaper);
@@ -137,13 +185,67 @@ async function startEngine() {
     spinnerOsc.start();
     spinnerNoise.start();
     toneFilter.type = "lowpass";
+    
     updateShaper();
     applyMaterial();
     buildKeyboard();
     engineStarted = true;
+    document.getElementById('powerLed').classList.add('on');
     drawAll();
 }
 
+// --- GYROSCOPE SYSTEM ---
+async function toggleGyro() {
+    if (!engineStarted) await startEngine();
+    
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission !== 'granted') return alert("Gyro access required for this mode.");
+        } catch (e) { console.error(e); }
+    }
+
+    gyroActive = !gyroActive;
+    document.getElementById('gyroLed').classList.toggle('on', gyroActive);
+
+    if (gyroActive) {
+        window.addEventListener('deviceorientation', handleOrientation);
+        window.addEventListener('devicemotion', handleMotion);
+    } else {
+        window.removeEventListener('deviceorientation', handleOrientation);
+        window.removeEventListener('devicemotion', handleMotion);
+        document.getElementById('pedal-board').style.transform = `rotateX(0deg) rotateY(0deg)`;
+    }
+}
+
+function handleOrientation(e) {
+    if (!gyroActive) return;
+    // Gamma (Left/Right) controls Drive
+    const driveNorm = (e.gamma + 45) / 90; 
+    document.getElementById('drive').value = Math.max(1, Math.min(25, driveNorm * 25));
+    
+    // Beta (Front/Back) controls Tone
+    const toneNorm = (e.beta - 10) / 60;
+    document.getElementById('tone').value = Math.max(400, Math.min(15000, toneNorm * 15000));
+    
+    // UI Visual Tilt
+    boardRotation.y = e.gamma * 0.2;
+    boardRotation.x = (e.beta - 45) * -0.2;
+    document.getElementById('pedal-board').style.transform = `rotateX(${boardRotation.x}deg) rotateY(${boardRotation.y}deg)`;
+    
+    updateShaper();
+}
+
+function handleMotion(e) {
+    if (!gyroActive) return;
+    const acc = e.acceleration;
+    const totalAcc = Math.abs(acc.x) + Math.abs(acc.y) + Math.abs(acc.z);
+    if (totalAcc > 30) { // Shake detected
+        manualMutate();
+    }
+}
+
+// --- CORE LOGIC ---
 function buildKeyboard() {
     const kb = document.getElementById('keyboard'); 
     kb.innerHTML = '';
@@ -202,7 +304,7 @@ async function toggleMic() {
             led.classList.add('on');
         } catch(e) { alert("Mic Access Denied"); }
     } else {
-        window.activeStream.getTracks().forEach(t => t.stop());
+        if(window.activeStream) window.activeStream.getTracks().forEach(t => t.stop());
         isMicActive = false;
         led.classList.remove('on');
     }
@@ -214,9 +316,8 @@ function toggleVocoder() {
 }
 
 function togglePower() {
-    const led = document.getElementById('powerLed');
-    if(!engineStarted) { startEngine(); led.classList.add('on'); } 
-    else { location.reload(); } // Safest clean reset
+    if(!engineStarted) startEngine();
+    else location.reload();
 }
 
 function updateShaper() {
@@ -225,12 +326,8 @@ function updateShaper() {
     const curve = new Float32Array(44100);
     const baseDrive = document.getElementById('drive').value / 6;
     
-    // Vocoder effect: scale intensity based on active keys or mic activity
     let modFactor = 1.0;
-    if(vocoderActive) {
-        const keysDown = activeNotes.size;
-        modFactor = 0.5 + (keysDown * 0.4);
-    }
+    if(vocoderActive) modFactor = 0.5 + (activeNotes.size * 0.4);
 
     for(let i=0; i<curve.length; i++) {
         let x = (i * 2) / curve.length - 1;
@@ -284,7 +381,6 @@ window.addEventListener('mouseup', () => isDragging = false);
 window.addEventListener('touchstart', e => { if(e.target.tagName !== 'INPUT') { isDragging = true; lastX = e.touches[0].clientX; } });
 window.addEventListener('touchmove', e => handleMove(e.touches[0].clientX));
 window.addEventListener('touchend', () => isDragging = false);
-
 window.addEventListener('keydown', e => { if(keyFreqs[e.key.toUpperCase()]) playNote(keyFreqs[e.key.toUpperCase()], e.key.toUpperCase()); });
 window.addEventListener('keyup', e => stopNote(e.key.toUpperCase()));
 
@@ -292,7 +388,7 @@ function drawAll() {
     requestAnimationFrame(drawAll);
     if(!engineStarted) return;
 
-    if(vocoderActive) updateShaper(); // Continuous shaper update for vocoder feel
+    if(vocoderActive) updateShaper();
 
     spinVelocity *= 0.985; 
     const speed = Math.abs(spinVelocity);
@@ -309,12 +405,12 @@ function drawAll() {
 
     [document.getElementById('helixLeft'), document.getElementById('helixRight')].forEach(canvas => {
         const ctx = canvas.getContext('2d');
-        canvas.width = 60; canvas.height = 500;
+        canvas.width = 60; canvas.height = window.innerHeight * 0.8;
         const dna = document.getElementById('dnaInput').value;
         const colors = {A:'#00f2ff', T:'#ff00ea', C:'#22ff00', G:'#ffcc00'};
         for(let i=0; i<20; i++){
             const char = dna[i % dna.length];
-            const y = (i/20) * 500;
+            const y = (i/20) * canvas.height;
             const xOff = Math.sin(time + i * 0.5 + speed) * (15 + vol * 0.5);
             ctx.strokeStyle = colors[char] || '#fff';
             ctx.globalAlpha = 0.2; ctx.beginPath(); ctx.moveTo(30+xOff, y); ctx.lineTo(30-xOff, y); ctx.stroke();
@@ -325,14 +421,14 @@ function drawAll() {
 
     const sCanvas = document.getElementById('scope');
     const sCtx = sCanvas.getContext('2d');
-    sCanvas.width = window.innerWidth; sCanvas.height = 80;
+    sCanvas.width = window.innerWidth; sCanvas.height = 100;
     const tData = new Uint8Array(analyzer.frequencyBinCount);
     analyzer.getByteTimeDomainData(tData);
     sCtx.strokeStyle = isMicActive ? "var(--accent)" : "var(--neon)";
     sCtx.lineWidth = 2; sCtx.beginPath();
     for(let i=0; i<tData.length; i++){
         const x = (i/tData.length) * sCanvas.width;
-        const y = (tData[i]/255) * 80;
+        const y = (tData[i]/255) * 100;
         if(i===0) sCtx.moveTo(x,y); else sCtx.lineTo(x,y);
     }
     sCtx.stroke();
