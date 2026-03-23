@@ -54,6 +54,9 @@
 				<button class="btn major" id="p-major" onclick="pipeMajor=!pipeMajor; this.classList.toggle('active')">Sync Rings</button>
 			</div>
 		</div>
+		<div class="group"><span class="label">Voice</span>
+			<button class="btn" id="mic-btn" onclick="toggleMic()">Mic Listen</button>
+		</div>
 		<div class="group"><span class="label">Echo Valley</span>
 			<button class="btn" id="warp" onclick="warp=!warp; this.classList.toggle('active')">Trail Mode</button>
 		</div>
@@ -68,10 +71,10 @@
 
 <script>
 const canvas = document.getElementById("c"), ctx = canvas.getContext("2d");
-let running=false, pipeMajor=false, gravity=false, warp=false;
+let running=false, pipeMajor=false, gravity=false, warp=false, micActive=false;
 let audioCtx, masterGain, delayNode, feedbackNode;
+let micStream, analyzer, dataArray;
 
-// Original Olympic Palette
 const colors = ["#0081C8", "#FCB131", "#000000", "#00A651", "#EE334E"];
 const ratios = [1, 1.125, 1.25, 1.5, 2];
 const rings = [];
@@ -84,6 +87,32 @@ function resize(){
 	ctx.scale(dpr, dpr);
 }
 window.onresize = resize; resize();
+
+async function toggleMic() {
+	if (!running) {
+		alert("Engage 'Power' first to wake the audio engine.");
+		return;
+	}
+	if (!micActive) {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			const source = audioCtx.createMediaStreamSource(stream);
+			analyzer = audioCtx.createAnalyser();
+			analyzer.fftSize = 256;
+			source.connect(analyzer);
+			// Note: We don't connect source to destination to avoid high-pitched feedback loops
+			dataArray = new Uint8Array(analyzer.frequencyBinCount);
+			micActive = true;
+			document.getElementById('mic-btn').classList.add('active');
+		} catch (err) {
+			console.error("Mic access denied", err);
+			alert("Microphone access is required for Voice mode.");
+		}
+	} else {
+		micActive = false;
+		document.getElementById('mic-btn').classList.remove('active');
+	}
+}
 
 function createAudio(){
 	audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -103,7 +132,7 @@ function createAudio(){
 	rings.forEach((r, i) => {
 		r.osc = audioCtx.createOscillator();
 		r.g = audioCtx.createGain();
-		r.osc.type = 'sine'; // Smoother sound for light theme
+		r.osc.type = 'sine';
 		r.osc.connect(r.g);
 		r.g.connect(masterGain);
 		r.osc.start();
@@ -126,7 +155,13 @@ function toggleAudio() {
 		});
 		createAudio(); running=true; 
 		document.getElementById('pwr').classList.add('active'); 
-	} else { audioCtx.close(); running=false; document.getElementById('pwr').classList.remove('active'); }
+	} else { 
+		audioCtx.close(); 
+		running=false; 
+		micActive = false;
+		document.getElementById('pwr').classList.remove('active');
+		document.getElementById('mic-btn').classList.remove('active');
+	}
 }
 
 function handleStart(id, x, y) {
@@ -148,7 +183,6 @@ function handleMove(id, x, y) {
 	}
 }
 
-// Unified Event Handling
 canvas.onmousedown = e => handleStart('mouse', e.offsetX, e.offsetY);
 window.onmousemove = e => handleMove('mouse', e.offsetX, e.offsetY);
 window.onmouseup = () => activeTouches.delete('mouse');
@@ -169,6 +203,15 @@ function loop(){
 
 	const cx = canvas.offsetWidth/2, cy = canvas.offsetHeight/2, spc = 160;
 	
+	// Analyze Voice Input
+	let micLoudness = 0;
+	if(micActive && analyzer) {
+		analyzer.getByteFrequencyData(dataArray);
+		let sum = 0;
+		for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+		micLoudness = sum / dataArray.length;
+	}
+
 	rings.forEach((r, i) => {
 		if(!gravity) {
 			let tx = (i < 3) ? cx + (i-1)*spc : cx + (i-3.5)*spc;
@@ -182,10 +225,16 @@ function loop(){
 			}
 		}
 
+		// Apply voice vibration to physics
+		if(micActive && micLoudness > 5) {
+			r.nodes.forEach(n => n.offset += (micLoudness * 0.4));
+			r.spinVel += (micLoudness * 0.0004);
+		}
+
 		r.rotation += r.spinVel + 0.01;
 		r.spinVel *= 0.98;
 		let comp = r.nodes.reduce((a,n)=>a+Math.abs(n.offset),0)/24;
-		r.nodes.forEach(n => n.offset *= 0.96);
+		r.nodes.forEach(n => n.offset *= 0.94);
 
 		if(running){
 			let physPitch = r.baseF - (r.vy * 1.2) + (comp * 0.6);
