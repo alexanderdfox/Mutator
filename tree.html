@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Arbor-V Mic-Responsive Synth</title>
+	<style>
+		:root {
+			--panel-bg: #1a1a1c;
+			--led-on: #00ffcc;
+			--led-off: #004433;
+			--accent: #00ffcc;
+		}
+
+		body {
+			margin: 0;
+			background: #0a0a0b;
+			color: var(--accent);
+			font-family: 'Courier New', monospace;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			overflow: hidden;
+		}
+
+		#synth-chassis {
+			width: 950px;
+			height: 700px;
+			background: var(--panel-bg);
+			border: 4px solid #333;
+			border-radius: 20px;
+			box-shadow: 0 50px 100px rgba(0,0,0,0.9);
+			position: relative;
+			padding: 25px;
+			display: flex;
+			flex-direction: column;
+			gap: 15px;
+		}
+
+		#display-shroud {
+			flex: 1;
+			background: #020405;
+			border: 12px solid #222;
+			border-radius: 8px;
+			position: relative;
+			overflow: hidden;
+			box-shadow: inset 0 0 40px #000;
+		}
+
+		canvas { width: 100%; height: 100%; cursor: crosshair; }
+
+		#control-panel {
+			height: 140px;
+			background: #252527;
+			border-radius: 10px;
+			display: flex;
+			align-items: center;
+			padding: 0 25px;
+			gap: 30px;
+			border-top: 2px solid #444;
+		}
+
+		.module { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+		.label { font-size: 0.65rem; font-weight: bold; text-transform: uppercase; color: #888; }
+
+		button {
+			background: #111;
+			border: 2px solid var(--led-off);
+			color: var(--led-off);
+			padding: 10px 15px;
+			cursor: pointer;
+			font-size: 0.8rem;
+			transition: 0.2s;
+		}
+
+		button.active {
+			border-color: var(--led-on);
+			color: var(--led-on);
+			box-shadow: 0 0 10px var(--led-on);
+		}
+
+		#mic-meter {
+			width: 10px; height: 50px;
+			background: #111;
+			position: relative;
+			border: 1px solid #444;
+		}
+
+		#mic-bar {
+			position: absolute; bottom: 0; width: 100%;
+			background: var(--accent);
+			height: 0%;
+			transition: height 0.05s;
+		}
+
+		select, .slider { background: #111; color: var(--accent); border: 1px solid #444; }
+	</style>
+</head>
+<body>
+
+<div id="synth-chassis">
+	<div id="display-shroud">
+		<canvas id="treeCanvas"></canvas>
+	</div>
+
+	<div id="control-panel">
+		<div class="module">
+			<div class="label">System</div>
+			<button id="power-btn">POWER</button>
+		</div>
+
+		<div class="module">
+			<div class="label">Mic Wind</div>
+			<div style="display: flex; gap: 5px; align-items: center;">
+				<button id="mic-btn">MIC OFF</button>
+				<div id="mic-meter"><div id="mic-bar"></div></div>
+			</div>
+		</div>
+
+		<div class="module">
+			<div class="label">Manual Wind</div>
+			<input type="range" id="windSlider" class="slider" min="0" max="100" value="0">
+		</div>
+
+		<div class="module">
+			<div class="label">Scale</div>
+			<select id="scaleSelect">
+				<option value="major">Major</option>
+				<option value="minor">Minor</option>
+				<option value="pentatonic">Zen</option>
+			</select>
+		</div>
+
+		<div style="margin-left: auto; text-align: right;">
+			<div style="font-size: 1.4rem; font-weight: 900;">ARBOR-V MKII</div>
+			<div class="label" style="color: var(--accent)">Bio-Acoustic Interface</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	const canvas = document.getElementById('treeCanvas');
+	const ctx = canvas.getContext('2d');
+	const powerBtn = document.getElementById('power-btn');
+	const micBtn = document.getElementById('mic-btn');
+	const micBar = document.getElementById('mic-bar');
+	const windSlider = document.getElementById('windSlider');
+	const scaleSelect = document.getElementById('scaleSelect');
+
+	let audioCtx, analyzer, micSource, dataArray;
+	let isRunning = false, micActive = false;
+	let time = 0, micWindValue = 0;
+	const branches = [];
+
+	const scales = {
+		major: [1, 1.125, 1.25, 1.333, 1.5, 1.666, 1.875, 2],
+		minor: [1, 1.125, 1.2, 1.333, 1.5, 1.6, 1.8, 2],
+		pentatonic: [1, 1.125, 1.333, 1.5, 1.75, 2, 2.25, 2.666]
+	};
+
+	async function initAudio() {
+		audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		analyzer = audioCtx.createAnalyser();
+		analyzer.fftSize = 256;
+		dataArray = new Uint8Array(analyzer.frequencyBinCount);
+	}
+
+	async function toggleMic() {
+		if (!micActive) {
+			try {
+				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+				micSource = audioCtx.createMediaStreamSource(stream);
+				micSource.connect(analyzer);
+				micActive = true;
+				micBtn.innerText = "MIC ON";
+				micBtn.classList.add('active');
+			} catch (err) { console.log("Mic access denied"); }
+		} else {
+			micActive = false;
+			micBtn.innerText = "MIC OFF";
+			micBtn.classList.remove('active');
+			if (micSource) micSource.disconnect();
+		}
+	}
+
+	function playNote(depth) {
+		if (!audioCtx) return;
+		const osc = audioCtx.createOscillator();
+		const g = audioCtx.createGain();
+		const scale = scales[scaleSelect.value];
+		const freq = 110 * scale[depth % scale.length] * Math.pow(2, Math.floor(depth/4));
+
+		osc.type = depth > 6 ? 'triangle' : 'sine';
+		osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+		g.gain.setValueAtTime(0, audioCtx.currentTime);
+		g.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 0.05);
+		g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.2);
+		
+		osc.connect(g).connect(audioCtx.destination);
+		osc.start(); osc.stop(audioCtx.currentTime + 1.2);
+	}
+
+	function drawBranch(x, y, len, angle, depth, width, globalWind) {
+		const sway = Math.sin(time + (depth * 0.7)) * (depth * globalWind);
+		const endX = x + len * Math.sin((angle + sway) * Math.PI / 180);
+		const endY = y - len * Math.cos((angle + sway) * Math.PI / 180);
+
+		ctx.beginPath();
+		ctx.moveTo(x, y); ctx.lineTo(endX, endY);
+		ctx.lineWidth = width;
+		ctx.strokeStyle = `hsla(${160 + depth * 12}, 100%, 50%, ${0.3 + (depth/10)})`;
+		ctx.stroke();
+
+		if (depth > 2) branches.push({ x: endX, y: endY, depth });
+		if (depth <= 0) return;
+
+		drawBranch(endX, endY, len * 0.78, angle - 24, depth - 1, width * 0.7, globalWind);
+		drawBranch(endX, endY, len * 0.78, angle + 24, depth - 1, width * 0.7, globalWind);
+	}
+
+	function loop() {
+		if (!isRunning) return;
+		ctx.fillStyle = 'rgba(2, 4, 5, 0.3)';
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		
+		// Handle Mic Data
+		if (micActive) {
+			analyzer.getByteFrequencyData(dataArray);
+			let avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
+			micWindValue = avg / 5; // Sensitivity
+			micBar.style.height = (avg / 255 * 100) + "%";
+		} else {
+			micWindValue = 0;
+			micBar.style.height = "0%";
+		}
+
+		const totalWind = (windSlider.value / 15) + micWindValue;
+		
+		branches.length = 0;
+		time += 0.04;
+		drawBranch(canvas.width / 2, canvas.height - 30, canvas.height / 5, 0, 8, 10, totalWind);
+
+		// Wind logic: trigger notes if total wind is high
+		if (totalWind > 3 && Math.random() > 0.985) {
+			const b = branches[Math.floor(Math.random() * branches.length)];
+			playNote(b.depth);
+		}
+
+		requestAnimationFrame(loop);
+	}
+
+	powerBtn.addEventListener('click', async () => {
+		if (!audioCtx) await initAudio();
+		isRunning = !isRunning;
+		powerBtn.classList.toggle('active');
+		if (isRunning) loop();
+	});
+
+	micBtn.addEventListener('click', toggleMic);
+
+	window.addEventListener('resize', () => {
+		canvas.width = canvas.offsetWidth;
+		canvas.height = canvas.offsetHeight;
+	});
+
+	// Initialize dimensions
+	canvas.width = canvas.offsetWidth;
+	canvas.height = canvas.offsetHeight;
+</script>
+
+</body>
+</html>
