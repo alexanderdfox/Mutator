@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Hurrian Hymn No.6 - Infinite Flute</title>
+	<style>
+		body { 
+			background: #0f172a; 
+			color: #f8fafc; 
+			font-family: 'Segoe UI', sans-serif; 
+			display: flex; 
+			flex-direction: column; 
+			align-items: center; 
+			justify-content: center; 
+			height: 100vh; 
+			margin: 0;
+			overflow: hidden;
+		}
+		#status { font-size: 1.4rem; margin-bottom: 20px; color: #38bdf8; font-weight: 300; }
+		button { 
+			padding: 15px 40px; 
+			font-size: 1.1rem; 
+			cursor: pointer; 
+			background: transparent; 
+			color: #38bdf8; 
+			border: 1px solid #38bdf8; 
+			border-radius: 50px;
+			transition: all 0.3s ease;
+		}
+		button:hover { background: #38bdf8; color: #0f172a; box-shadow: 0 0 20px rgba(56, 189, 248, 0.4); }
+	</style>
+</head>
+<body>
+
+	<div id="status">Press to Breathe Life into the Hymn</div>
+	<button id="playBtn">BEGIN FLUTE LOOP</button>
+
+<script>
+	const notes_semitones = [0, -2, -4, -5, -7, -5, -4, -2, 0, -2, -4, -5, -7, -9, -7, -5, -4, -2, 0, -2, -4, -5, -4, 0];
+	const unit_durations = [2, 2, 2, 2, 3, 2, 2, 4, 2, 2, 2, 2, 3, 2, 2, 4, 2, 2, 2, 2, 3, 2, 2, 6];
+	
+	const TOTAL_DURATION_MS = 8000;
+	const total_units = unit_durations.reduce((a, b) => a + b, 0);
+	const ms_per_unit = TOTAL_DURATION_MS / total_units;
+
+	// Flute Harmonics: Strong fundamental, very weak overtones
+	const harmonics = [1.0, 0.15, 0.05, 0.02];
+	
+	let audioCtx;
+	let isPlaying = false;
+
+	async function playHymn() {
+		if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		
+		const low_freq = 666 + (Math.random() * 500); 
+		const high_freq = 1500 + (Math.random() * 500);
+		
+		document.getElementById('status').innerText = `Flute Sweep: ${Math.round(low_freq)}Hz ➔ ${Math.round(high_freq)}Hz`;
+
+		let currentTime = audioCtx.currentTime;
+
+		notes_semitones.forEach((semitone, i) => {
+			const progress = i / (notes_semitones.length - 1);
+			const base_freq = low_freq + (high_freq - low_freq) * progress;
+			const freq = base_freq * Math.pow(2, semitone / 12);
+			const note_duration = (unit_durations[i] * ms_per_unit) / 1000;
+
+			playFluteNote(freq, currentTime, note_duration);
+			currentTime += note_duration;
+		});
+
+		setTimeout(() => { if(isPlaying) playHymn(); }, TOTAL_DURATION_MS);
+	}
+
+	function playFluteNote(freq, startTime, duration) {
+		const masterGain = audioCtx.createGain();
+		const pan = audioCtx.createStereoPanner();
+		pan.pan.value = (Math.random() * 0.4) - 0.2;
+
+		masterGain.connect(pan);
+		pan.connect(audioCtx.destination);
+
+		// --- FLUTE ENVELOPE ---
+		// Slower attack (0.05s) and a soft release (0.1s)
+		masterGain.gain.setValueAtTime(0, startTime);
+		masterGain.gain.linearRampToValueAtTime(0.25, startTime + 0.06); 
+		masterGain.gain.setValueAtTime(0.25, startTime + duration - 0.1);
+		masterGain.gain.linearRampToValueAtTime(0, startTime + duration);
+
+		// --- VIBRATO (LFO) ---
+		const vibrato = audioCtx.createOscillator();
+		const vibratoGain = audioCtx.createGain();
+		vibrato.frequency.value = 5 + Math.random() * 2; // 5-7Hz vibrato
+		vibratoGain.gain.value = freq * 0.005; // Depth of pitch change
+		
+		vibrato.connect(vibratoGain);
+
+		// --- HARMONICS ---
+		harmonics.forEach((amp, index) => {
+			const osc = audioCtx.createOscillator();
+			const g = audioCtx.createGain();
+			
+			osc.type = 'sine';
+			osc.frequency.value = freq * (index + 1);
+			
+			// Connect vibrato to the pitch of each harmonic
+			vibratoGain.connect(osc.frequency);
+			
+			g.gain.value = amp;
+			osc.connect(g);
+			g.connect(masterGain);
+			
+			osc.start(startTime);
+			osc.stop(startTime + duration);
+		});
+
+		vibrato.start(startTime);
+		vibrato.stop(startTime + duration);
+	}
+
+	document.getElementById('playBtn').addEventListener('click', () => {
+		if (!isPlaying) {
+			isPlaying = true;
+			document.getElementById('playBtn').innerText = "STOP";
+			playHymn();
+		} else {
+			isPlaying = false;
+			document.getElementById('playBtn').innerText = "BEGIN FLUTE LOOP";
+			location.reload(); 
+		}
+	});
+</script>
+</body>
+</html>
