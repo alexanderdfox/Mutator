@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AETHER PRO | Master Sequencer</title>
+<style>
+:root { --bg: #050508; --ui: #11111a; --blue: #7aa2f7; --pink: #f7768e; --text: #c0caf5; --border: #24283b; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui; height: 100vh; overflow: hidden; display: flex; flex-direction: column; touch-action: none; }
+
+header { background: var(--ui); padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); z-index: 100; }
+.logo { font-weight: 200; letter-spacing: 4px; text-transform: uppercase; font-size: 0.75rem; color: var(--blue); }
+
+.controls { display: flex; gap: 8px; }
+.btn-group { display: flex; background: rgba(255,255,255,0.05); border-radius: 6px; padding: 2px; border: 1px solid var(--border); }
+button { background: transparent; border: none; color: #565f89; padding: 6px 12px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; text-transform: uppercase; transition: 0.2s; }
+button.active { background: var(--blue); color: #000; font-weight: bold; }
+button#gravBtn.off { color: var(--pink); border: 1px solid var(--pink); }
+
+#inspector { position: fixed; right: 20px; bottom: 20px; background: var(--ui); padding: 15px; border-radius: 10px; border: 1px solid var(--border); width: 200px; display: none; box-shadow: 0 10px 40px rgba(0,0,0,0.8); z-index: 200; }
+.label { font-size: 0.6rem; text-transform: uppercase; color: #565f89; margin-top: 10px; display: block; }
+select, input[type=range] { width: 100%; background: #1f2335; color: white; border: 1px solid var(--border); padding: 5px; border-radius: 4px; margin-top: 5px; }
+
+canvas { flex-grow: 1; background: #020205; cursor: crosshair; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Aether Pro</div>
+  <div class="controls">
+	<button id="gravBtn" onclick="toggleGravity()">Gravity: ON</button>
+	<div class="btn-group">
+	  <button id="modeSelect" onclick="setMode('select')" class="active">Edit</button>
+	  <button id="modeBall" onclick="setMode('ball')">+ Ball</button>
+	  <button id="modeWall" onclick="setMode('wall')">+ Wall</button>
+	</div>
+	<div class="btn-group">
+	  <button onclick="quantizeAll()">Quantize</button>
+	  <button onclick="saveProject()">Save</button>
+	  <button onclick="loadProject()">Load</button>
+	  <button onclick="clearAll()" style="color:var(--pink)">Reset</button>
+	</div>
+  </div>
+</header>
+
+<div id="inspector">
+  <div style="font-size:0.8rem; font-weight:bold; color:var(--blue); border-bottom:1px solid var(--border); padding-bottom:5px;">Object Settings</div>
+  
+  <span class="label">Sound Engine</span>
+  <select id="engineType" onchange="updateBallSettings()">
+	<option value="sine">Synth: Sine</option>
+	<option value="square">Synth: Square</option>
+	<option value="sawtooth">Synth: Sawtooth</option>
+	<option value="triangle">Synth: Triangle</option>
+	<option value="kick">Drum: Kick</option>
+	<option value="snare">Drum: Snare</option>
+	<option value="cymbal">Drum: Cymbal</option>
+  </select>
+
+  <span class="label">Pitch / Note</span>
+  <input type="range" id="pitchSlider" min="24" max="96" value="60" oninput="updateBallSettings()">
+  
+  <button onclick="deleteSelected()" style="width:100%; margin-top:15px; color:var(--pink); border:1px solid #f7768e44">Delete</button>
+</div>
+
+<canvas id="stage"></canvas>
+
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+let balls = [], walls = [], selected = null, dragging = null, dragMode = null;
+let gravityActive = true;
+let currentMode = 'select';
+
+// --- SOUND ENGINES ---
+function triggerDrum(type, x, speed) {
+	if (audioCtx.state === 'suspended') audioCtx.resume();
+	const now = audioCtx.currentTime;
+	const gain = audioCtx.createGain();
+	const panner = audioCtx.createPanner();
+	panner.setPosition((x / canvas.width) * 2 - 1, 0, 1);
+	const vol = Math.min(0.4, speed / 40);
+
+	if (type === 'kick') {
+		const osc = audioCtx.createOscillator();
+		osc.frequency.setValueAtTime(150, now);
+		osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.4);
+		gain.gain.setValueAtTime(vol, now);
+		gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+		osc.connect(gain);
+		gain.connect(panner).connect(audioCtx.destination);
+		osc.start(); osc.stop(now + 0.4);
+	} else if (type === 'snare' || type === 'cymbal') {
+		const bufferSize = audioCtx.sampleRate * 0.2;
+		const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+		const data = buffer.getChannelData(0);
+		for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+		const noise = audioCtx.createBufferSource();
+		noise.buffer = buffer;
+		const filter = audioCtx.createBiquadFilter();
+		filter.type = type === 'snare' ? 'lowpass' : 'highpass';
+		filter.frequency.value = type === 'snare' ? 1500 : 8000;
+		gain.gain.setValueAtTime(vol, now);
+		gain.gain.exponentialRampToValueAtTime(0.001, now + (type === 'snare' ? 0.2 : 0.5));
+		noise.connect(filter).connect(gain);
+		gain.connect(panner).connect(audioCtx.destination);
+		noise.start();
+	}
+}
+
+function triggerSynth(midi, type, x, speed) {
+	if (audioCtx.state === 'suspended') audioCtx.resume();
+	const now = audioCtx.currentTime;
+	const freq = 440 * Math.pow(2, (midi - 69) / 12);
+	const osc = audioCtx.createOscillator();
+	const gain = audioCtx.createGain();
+	const panner = audioCtx.createPanner();
+
+	panner.setPosition((x / canvas.width) * 2 - 1, 0, 1);
+	osc.type = type;
+	osc.frequency.setValueAtTime(freq, now);
+	
+	const vol = Math.min(0.2, speed / 60);
+	gain.gain.setValueAtTime(vol, now);
+	gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
+	osc.connect(panner).connect(gain).connect(audioCtx.destination);
+	osc.start(); osc.stop(now + 1.2);
+}
+
+class Ball {
+	constructor(x, y, midi=60, type='sine') {
+		this.x=x; this.y=y; this.midi=midi; this.engine=type;
+		this.vx=2; this.vy=0; this.r=12; this.ping=0;
+	}
+	update() {
+		if (!gravityActive || dragging === this) return;
+		this.vy += 0.25; this.x += this.vx; this.y += this.vy;
+		this.ping *= 0.9;
+		if (this.x < this.r || this.x > canvas.width - this.r) { this.vx *= -0.8; this.x = Math.max(this.r, Math.min(canvas.width-this.r, this.x)); }
+		if (this.y > canvas.height - this.r) { this.y = canvas.height - this.r; const impact = Math.abs(this.vy); this.vy *= -0.6; if(impact > 1.5) this.fire(impact); }
+		walls.forEach(w => w.resolve(this));
+	}
+	fire(v) {
+		this.ping = 1;
+		if (['kick', 'snare', 'cymbal'].includes(this.engine)) triggerDrum(this.engine, this.x, v);
+		else triggerSynth(this.midi, this.engine, this.x, v);
+	}
+	draw() {
+		const hue = ['kick','snare','cymbal'].includes(this.engine) ? 0 : ((this.midi - 36) / 48) * 280;
+		const sat = ['kick','snare','cymbal'].includes(this.engine) ? '0%' : '75%';
+		ctx.beginPath(); ctx.arc(this.x, this.y, this.r + this.ping*15, 0, Math.PI*2);
+		ctx.strokeStyle = `hsla(${hue}, ${sat}, 80%, ${this.ping})`; ctx.stroke();
+		ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+		ctx.fillStyle = selected === this ? "#fff" : `hsl(${hue}, ${sat}, 60%)`;
+		ctx.fill();
+		ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.font = "8px Arial"; ctx.textAlign = "center";
+		ctx.fillText(this.engine.charAt(0).toUpperCase(), this.x, this.y+3);
+	}
+}
+
+class Wall {
+	constructor(x, y, a=0) { this.x=x; this.y=y; this.w=120; this.h=12; this.angle=a; }
+	draw() {
+		ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
+		ctx.fillStyle = selected === this ? "#3b4261" : "#16161e";
+		ctx.strokeStyle = selected === this ? "#7aa2f7" : "#414868";
+		ctx.lineWidth = 2;
+		ctx.fillRect(-this.w/2, -this.h/2, this.w, this.h);
+		ctx.strokeRect(-this.w/2, -this.h/2, this.w, this.h);
+		if(selected === this) { ctx.beginPath(); ctx.arc(0,-40,7,0,Math.PI*2); ctx.fillStyle="#f7768e"; ctx.fill(); }
+		ctx.restore();
+	}
+	resolve(b) {
+		const dx = b.x - this.x, dy = b.y - this.y;
+		const cos = Math.cos(-this.angle), sin = Math.sin(-this.angle);
+		const rx = dx * cos - dy * sin, ry = dx * sin + dy * cos;
+		if (Math.abs(rx) < this.w/2 + b.r && Math.abs(ry) < this.h/2 + b.r) {
+			const nx = Math.sin(this.angle), ny = -Math.cos(this.angle);
+			const dot = b.vx * nx + b.vy * ny;
+			b.vx = (b.vx - 2 * dot * nx) * 0.85; b.vy = (b.vy - 2 * dot * ny) * 0.85;
+			b.x += nx * (this.h/2 + b.r - ry); b.y += ny * (this.h/2 + b.r - ry);
+			b.fire(Math.sqrt(b.vx**2 + b.vy**2) + 10);
+		}
+	}
+}
+
+// --- CORE LOGIC ---
+function setMode(m) {
+	currentMode = m;
+	document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+	document.getElementById('mode' + m.charAt(0).toUpperCase() + m.slice(1)).classList.add('active');
+}
+
+function toggleGravity() {
+	gravityActive = !gravityActive;
+	const b = document.getElementById("gravBtn");
+	b.innerText = gravityActive ? "Gravity: ON" : "Gravity: OFF";
+	b.className = gravityActive ? "" : "off";
+}
+
+function quantizeAll() {
+	const step = 40;
+	balls.forEach(b => { b.x = Math.round(b.x / step) * step; b.y = Math.round(b.y / step) * step; });
+	walls.forEach(w => { w.x = Math.round(w.x / step) * step; w.y = Math.round(w.y / step) * step; });
+}
+
+canvas.addEventListener('pointerdown', e => {
+	const r = canvas.getBoundingClientRect();
+	const x = e.clientX - r.left, y = e.clientY - r.top;
+	if (currentMode === 'ball') { const b = new Ball(x, y); balls.push(b); select(b); return; }
+	if (currentMode === 'wall') { const w = new Wall(x, y); walls.push(w); select(w); return; }
+	let hit = null;
+	[...balls, ...walls].forEach(o => {
+		if (o instanceof Ball && Math.hypot(o.x-x, o.y-y) < 25) hit = {o, m:'move'};
+		else if (o instanceof Wall) {
+			const rx = (x-o.x)*Math.cos(-o.angle) - (y-o.y)*Math.sin(-o.angle);
+			const ry = (x-o.x)*Math.sin(-o.angle) + (y-o.y)*Math.cos(-o.angle);
+			if (Math.abs(rx) < o.w/2 && Math.abs(ry) < o.h/2) hit = {o, m:'move'};
+			else if (Math.hypot(rx, ry+40) < 20) hit = {o, m:'rotate'};
+		}
+	});
+	if (hit) { select(hit.o); dragging = hit.o; dragMode = hit.m; }
+	else { selected = null; document.getElementById("inspector").style.display = "none"; }
+});
+
+canvas.addEventListener('pointermove', e => {
+	if (!dragging) return;
+	const r = canvas.getBoundingClientRect();
+	const x = e.clientX - r.left, y = e.clientY - r.top;
+	if (dragMode === 'move') { dragging.x = x; dragging.y = y; if(dragging instanceof Ball){dragging.vx=0;dragging.vy=0;} }
+	else { dragging.angle = Math.atan2(y - dragging.y, x - dragging.x) + Math.PI/2; }
+});
+window.addEventListener('pointerup', () => dragging = null);
+
+function select(o) {
+	selected = o;
+	const ins = document.getElementById("inspector");
+	if (o instanceof Ball) {
+		ins.style.display = "block";
+		document.getElementById("engineType").value = o.engine;
+		document.getElementById("pitchSlider").value = o.midi;
+	} else { ins.style.display = "none"; }
+}
+
+function updateBallSettings() {
+	if (selected instanceof Ball) {
+		selected.engine = document.getElementById("engineType").value;
+		selected.midi = parseInt(document.getElementById("pitchSlider").value);
+	}
+}
+
+function saveProject() { localStorage.setItem('aether_v4', JSON.stringify({ balls, walls })); }
+function loadProject() {
+	const d = JSON.parse(localStorage.getItem('aether_v4'));
+	if(!d) return;
+	balls = d.balls.map(b => new Ball(b.x, b.y, b.midi, b.engine));
+	walls = d.walls.map(w => new Wall(w.x, w.y, w.angle));
+}
+function clearAll() { balls = []; walls = []; selected = null; document.getElementById("inspector").style.display = "none"; }
+function deleteSelected() { balls = balls.filter(b => b!==selected); walls = walls.filter(w => w!==selected); selected=null; document.getElementById("inspector").style.display="none"; }
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight - 60; }
+window.onresize = resize; resize();
+
+function loop() {
+	ctx.fillStyle = "rgba(5, 5, 8, 0.4)";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	if(!gravityActive) {
+		ctx.strokeStyle = "rgba(122, 162, 247, 0.1)";
+		for(let i=0; i<canvas.width; i+=40) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+		for(let i=0; i<canvas.height; i+=40) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+	}
+	walls.forEach(w => w.draw());
+	balls.forEach(b => { b.update(); b.draw(); });
+	requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
